@@ -1,0 +1,410 @@
+Imports DotSpatial.Controls
+Imports DotSpatial.Data
+Imports DotSpatial.Symbology
+Imports DotSpatial.Topology
+Imports DotSpatial.Projections
+Imports Microsoft.Office.Interop.Excel
+
+
+
+Public Enum MapShapeType
+    Point
+    Line
+    ' Add other shape types as needed
+End Enum
+Public Class Form1
+    Private ShapeType As MapShapeType
+    Private existingFeature As IFeature
+    Private Sub Form1_Load(sender As Object, e As EventArgs) Handles MyBase.Load
+
+    End Sub
+
+#Region "Point shapefile class level variable"
+
+    'the new point feature set
+    Dim pointF As New FeatureSet()
+
+    'the id of point
+    Dim pointID As Integer = 0
+
+    'to differentiate the right and left mouse click
+    Dim pointmouseClick As Boolean = False
+
+#End Region
+    Private Sub CreatePointShapeFileToolStripMenuItem_Click(sender As Object, e As EventArgs) Handles CreatePointShapeFileToolStripMenuItem.Click
+        'Change the cursor style 
+        Map1.Cursor = Cursors.Cross
+        'set the shape type to the classlevel string variable         
+        'we are going to use this variable in select case statement
+        ShapeType = "Point"
+        'set projection
+        PointF.Projection = Map1.Projection
+        'initialize the featureSet attribute table
+        Dim column As New DataColumn("ID")
+        PointF.DataTable.Columns.Add(column)
+        'add the featureSet as map layer 
+        Dim pointLayer As MapPointLayer = Map1.Layers.Add(pointF)
+        'Create a new symbolizer
+        Dim symbol As New PointSymbolizer(Color.Red, DotSpatial.Symbology.PointShape.Ellipse, 3)
+        'Set the symbolizer to the point layer
+        pointLayer.Symbolizer = symbol
+        'Set the legentText as point
+        pointLayer.LegendText = "point"
+        'Set left mouse click as true
+        pointmouseClick = True
+    End Sub
+
+    Private Sub Map1_Load(sender As Object, e As EventArgs) Handles Map1.Load
+
+    End Sub
+
+    Private Sub Map1_MouseDown(sender As Object, e As MouseEventArgs) Handles Map1.MouseDown
+        Select Case ShapeType
+            Case "Point"
+                If e.Button = MouseButtons.Left Then
+                    If (pointmouseClick) Then
+                        'This method is used to convert the screen coordinate to map coordinate                         
+                        'e.location is the mouse click point on the map control 
+                        Dim coord As Coordinate
+                        'Create a new point                         
+                        'Input parameter is clicked point coordinate 
+                        Dim point As New DotSpatial.Topology.Point(coord)
+                        'Add the point into the Point Feature                         
+                        'assigning the point feature to IFeature because via it only we can set the attributes. 
+                        Dim currentFeature As IFeature = pointF.AddFeature(point)
+                        'increase the point id 
+                        pointID = pointID + 1
+                        'set the ID attribute 
+                        currentFeature.DataRow("ID") = pointID
+                        'refresh the map 
+                        Map1.ResetBuffer()
+                    End If
+                Else
+                    Map1.Cursor = Cursors.Default
+                    pointmouseClick = False
+                End If
+            Case "line"
+                If e.Button = MouseButtons.Left Then
+                    'left click - fill array of coordinates
+                    'coordinate of clicked point
+                    Dim coord As Coordinate
+                    If (linemouseClick) Then
+                        'first time left click - create empty line feature
+                        If firstClick Then
+                            Dim lineArray As New List(Of Coordinate)
+                            Dim lineGeometry As New LineString(lineArray)
+                            Dim lineFeature As IFeature = lineF.AddFeature(lineGeometry)
+                            lineID = lineID + 1
+                            lineFeature.DataRow("LineID") = lineID
+                            firstClick = False
+                        Else
+                            'second or more clicks - add points to the existing feature
+                            Dim existingFeature As IFeature = lineF.Features(lineF.Features.Count - 1)
+                            'refresh the map if line has 2 or more point
+                        End If
+                    End If
+                End If
+            Case "polygon"
+                If e.Button = MouseButtons.Left Then
+                    'left click - fill array of coordinates
+                    Dim coord As Coordinate 
+                    If (polygonmouseClick) Then
+                        'first time left click - create empty line feature
+                        If firstClick Then
+                            'Create a new List called polygonArray.
+                            'Here this list will store the Coordinates
+                            'We are going to store the mouse click coordinates into this array.
+                            Dim polygonArray As New List(Of Coordinate)
+                            'Create an instance for LinearRing class.
+                            'We pass the polygon List to the constructor of this class
+                            Dim polygonGeometry As New LinearRing(polygonArray)
+                            'Add the polygonGeometry instance to PolygonFeature
+                        End If
+                    End If
+                    Dim polygonFeature As IFeature = polygonF.AddFeature(polygonGeometry)
+                    'add first coordinate to the polygon feature
+                    'set the polygon feature attribute
+                    polygonID = polygonID + 1
+                    polygonFeature.DataRow("ID") = polygonID
+                    firstClick = False
+                Else
+                    'second or more clicks - add points to the existing feature
+                    Dim existingFeature As IFeature = polygonF.Features(polygonF.Features.Count - 1)
+                    'refresh the map if line has 2 or more points 
+                    'right click - reset first mouse click
+                    firstClick = True
+                    Map1.Cursor = Cursors.Arrow
+                End If
+        End Select
+    End Sub
+
+    Private Sub SavePointShapeFileToolStripMenuItem_Click(sender As Object, e As EventArgs) Handles SavePointShapeFileToolStripMenuItem.Click
+        pointF.SaveAs("point.shp", True)
+        MsgBox("The point shapefile has been saved.")
+        Map1.Cursor = Cursors.Arrow
+    End Sub
+
+#Region "Polyline shapefile class level variables"
+    'the line layer
+    Dim lineLayer As MapLineLayer
+
+    'the line feature set
+    Dim lineF As New FeatureSet()
+
+    Dim lineID As Integer = 0
+
+    'boolean variable for first time mouse click
+    Dim firstClick As Boolean = False
+
+    'It controls the drawing the polyline after the polyline saved operation.
+    Dim linemouseClick As Boolean = False
+#End Region
+
+    Private Sub CreatePolylineShapeFileToolStripMenuItem_Click(sender As Object, e As EventArgs) Handles CreatePolylineShapeFileToolStripMenuItem.Click
+        'initialize polyline feature set
+        Map1.Cursor = Cursors.Cross
+
+        'set shape type
+        ShapeType = "line"
+
+        'set projection
+        lineF.Projection = Map1.Projection
+
+        'initialize the featureSet attribute table
+        Dim column As New DataColumn("LineID")
+
+        If Not (lineF.DataTable.Columns.Contains("LineID")) Then
+            lineF.DataTable.Columns.Add(column)
+        End If
+
+        'add the featureSet as map layer
+        lineLayer = Map1.Layers.Add(lineF)
+
+        Dim symbol As New LineSymbolizer(Color.Blue, 2)
+        lineLayer.Symbolizer = symbol
+        lineLayer.LegendText = "line"
+
+        firstClick = True
+        linemouseClick = True
+    End Sub
+
+    Private Sub SavePolylineShapeFileToolStripMenuItem_Click(sender As Object, e As EventArgs) Handles SavePolylineShapeFileToolStripMenuItem.Click
+        lineF.SaveAs("c:\MW\line.shp", True)
+        MsgBox("The line shapefile has been saved in C:\MW\")
+        Map1.Cursor = Cursors.Arrow
+        linemouseClick = False
+    End Sub
+
+#Region "Polygon shapefile class level variables"
+    'the polygon feature set
+    Dim polygonF As New FeatureSet()
+    Dim polygonID As Integer = 0
+    Dim polygonmouseClick As Boolean = False
+    Private polygonGeometry As GeoAPI.Geometries.IGeometry
+#End Region
+    Private Sub CreatePolygonShapeFileToolStripMenuItem_Click(sender As Object, e As EventArgs) Handles CreatePolygonShapeFileToolStripMenuItem.Click
+        'initialize polyline feature set
+        Map1.Cursor = Cursors.Cross
+
+        'set shape type
+        ShapeType = "polygon"
+
+        'set projection
+        polygonF.Projection = Map1.Projection
+
+        'initialize the featureSet attribute table
+        Dim column As New DataColumn("ID")
+        polygonF.DataTable.Columns.Add(column)
+
+        'add the featureSet as map layer
+        Dim polygonLayer As MapPolygonLayer = Map1.Layers.Add(polygonF)
+
+        'set a symbology
+        Dim symbol As New PolygonSymbolizer(Color.Green)
+        polygonLayer.Symbolizer = symbol
+
+        'add the legend text
+        polygonLayer.LegendText = "polygon"
+
+        firstClick = True
+
+        polygonmouseClick = True
+    End Sub
+
+    Private Sub SavePolygonShapeFileToolStripMenuItem_Click(sender As Object, e As EventArgs) Handles SavePolygonShapeFileToolStripMenuItem.Click
+        polygonF.SaveAs("c:\MW\polygon.shp", True)
+        MsgBox("The polygon shapefile has been saved in C:\MW\")
+        Map1.Cursor = Cursors.Arrow
+        polygonmouseClick = False
+    End Sub
+
+    Private Sub ViewAttributeTableToolStripMenuItem_Click(sender As Object, e As EventArgs) Handles ViewAttributeTableToolStripMenuItem.Click
+        'Declare a datatable
+        Dim dt As DataTable
+        If Map1.Layers.Count > 0 Then
+            Dim stateLayer As MapPolygonLayer
+            stateLayer = CType(Map1.Layers(0), MapPolygonLayer)
+            If stateLayer Is Nothing Then MessageBox.Show("The layer is not a polygon layer.")
+        Else
+            'Get the shapefile's attribute table to our datatable dt
+            dt.stateLayer.DataSet.DataTable
+            'Set the datagridview datasource from datatable dt
+            dgvAttributeTable.DataSource = dt
+        End If
+        MessageBox.Show("Please add a layer to the map.")
+    End Sub
+
+    Private Sub AddANewColumnInAttributeTableToolStripMenuItem_Click(sender As Object, e As EventArgs) Handles AddANewColumnInAttributeTableToolStripMenuItem.Click
+        'Declare a datatable
+        Dim dt As DataTable
+        If Map1.Layers.Count > 0 Then
+        End If
+        Dim stateLayer As MapPolygonLayer
+        stateLayer = CType(Map1.Layers(0), MapPolygonLayer)
+        If stateLayer Is Nothing Then
+            MessageBox.Show("The layer is not a polygon layer.")
+        Else
+            'Get the shapefile's attribute table to our datatable dt
+            dt.stateLayer.DataSet.DataTable
+            'Add new column
+            Dim column As New DataColumn("PercentMales")
+            dt.Columns.Add(column)
+            'calculate values
+            For Each row As DataRow In dt.Rows
+                Dim males As Double = row("males")
+                Dim females As Double = row("females")
+                Dim malesPercentage As Double = (males / (males + females)) * 100
+                row("PercentMales") = malesPercentage
+            Next
+            'Set the datagridview datasource from datatable dt
+            dgvAttributeTable.DataSource = dt
+        End If
+        MessageBox.Show("Please add a layer to the map.")
+    End Sub
+
+    Private Sub UpdateAttributeTableInShapeFileToolStripMenuItem_Click(sender As Object, e As EventArgs) Handles UpdateAttributeTableInShapeFileToolStripMenuItem.Click
+        If Map1.Layers.Count > 0 Then
+            Dim stateLayer As MapPolygonLayer
+            stateLayer = CType(Map1.Layers(0), MapPolygonLayer)
+            If stateLayer Is Nothing Then
+                MessageBox.Show("The layer is not a polygon layer.")
+            Else
+                stateLayer.DataSet.Save()
+            End If
+        Else
+            MessageBox.Show("Please add a layer to the map.")
+        End If
+    End Sub
+
+    Private Sub DeleteAColumnInAttributeTableToolStripMenuItem_Click(sender As Object, e As EventArgs) Handles DeleteAColumnInAttributeTableToolStripMenuItem.Click
+        'Declare a datatable
+        Dim dt As DataTable
+        If Map1.Layers.Count > 0 Then
+            Dim stateLayer As MapPolygonLayer
+            stateLayer = CType(Map1.Layers(0), MapPolygonLayer)
+            If stateLayer Is Nothing Then MessageBox.Show("The layer is not a polygon layer.")
+        Else
+            'Get the shapefile's attribute table to our datatable dt
+            dt.stateLayer.DataSet.DataTable
+            'Remove a column
+            dt.Columns.Remove("PercentMale")
+            'Set the datagridview datasource from datatable dt
+            dgvAttributeTable.DataSource = dt
+        End If
+        MessageBox.Show("Please add a layer to the map.")
+    End Sub
+
+    Private Sub ExportAttributeTableToExcelToolStripMenuItem_Click(sender As Object, e As EventArgs) Handles ExportAttributeTableToExcelToolStripMenuItem.Click
+        'Declare a datatable
+        Dim dt As DataTable
+        If Map1.Layers.Count > 0 Then
+            Dim stateLayer As MapPolygonLayer
+            stateLayer = CType(Map1.Layers(0), MapPolygonLayer)
+            If stateLayer Is Nothing Then
+                MessageBox.Show("The layer is not a polygon layer.")
+            Else
+                'Get the shapefile's attribute table to our datatable dt
+                dt = stateLayer.DataSet.DataTable
+                'Call the sub ExportToExcel  
+                'This sub procedure expects a datatable as an input
+                ExportToExcel(dt)
+            End If
+            MessageBox.Show("Please add a layer to the map.")
+        End If
+    End Sub
+
+    '' <summary>     
+    ''' This sub method is used to create an excel worksheet from the attribute table     
+    ''' ''' </summary>     ''' <param name="objDT">attribute table as a datatable input</param>     
+    ''' ''' <remarks> Click the COM tab of the Add Reference dialog box, and find Microsoft Excel 14 Object Library.</remarks>     
+    Private Sub ExportToExcel(ByVal objDT As DataTable)
+        Dim Excel As Object = CreateObject("Excel.Application")
+        Dim strFilename As String
+        Dim intCol, intRow As Integer
+        'path for storing excel datasheet
+        Dim strPath As String = "C:\2009 Falls\"
+        If Excel Is Nothing Then
+            MsgBox("It appears that Excel is not installed on this machine. This operation requires MS Excel to be installed on this machine.", MsgBoxStyle.Critical)
+            Return
+        End If
+        Try
+            With Excel
+                .SheetsInNewWorkbook =
+                    .Workbook.Add()
+                .Worksheets(1)
+                .Select()
+                .cells(1, 1).value = "Attribute table"
+                'Heading of the excel file
+                .cells(1, 1).EntireRow.Font.Bold = True
+
+                'Add the column names from the attribute table to excel worksheet
+                Dim intI As Integer = 1
+                For intCol = 0 To objDT.Columns.Count - 1
+                    .cells(2, intI).value = objDT.Columns(intCol).ColumnName
+                    .cells(2, intI).EntireRow.Font.Bold = True
+                    intI += 1
+                Next
+
+                'Add the data row values from the attribute table to ecxel worksheet
+                intI = 3
+                Dim intK As Integer = 1
+                For intCol = 0 To objDT.Columns.Count - 1
+                    intI = 3
+                    For intRow = 0 To objDT.Rows.Count - 1
+                        .Cells(intI, intK).Value = objDT.Rows(intRow).ItemArray(intCol)
+                        intI += 1
+                    Next
+                    intK += 1
+                Next
+
+
+                If Mid$(strPath, strPath.Length, 1) <> "\" Then
+                    strPath = strPath & "\"
+                End If
+
+                strFilename = strPath & "AttributeTable.xls"
+
+                .ActiveCell.Worksheet.SaveAs(strFilename)
+            End With
+
+            System.Runtime.InteropServices.Marshal.ReleaseComObject(Excel)
+
+            Excel = Nothing
+            MsgBox("Data's are exported to Excel Succesfully in '" & strFilename & "'", MsgBoxStyle.Information)
+        Catch ex As Exception
+            MsgBox(ex.Message)
+        End Try
+        ' The excel is created and opened for insert value. We most close this excel using this system
+        Dim pro() As Process = System.Diagnostics.Process.GetProcessesByName("EXCEL")
+        For Each i As Process In pro
+            i.Kill()
+        Next
+    End Sub
+
+    Private Sub PrintMapToolStripMenuItem_Click(sender As Object, e As EventArgs) Handles PrintMapToolStripMenuItem.Click
+        Dim frm As New DotSpatial.Controls.LayoutForm
+        frm.MapControl = Map1
+        frm.Show()
+    End Sub
+End Class
+
